@@ -65,8 +65,43 @@ def display_scores():
         screen.blit(score_text, (x_pos, y_pos))
 
 
-def display_playing_menu():
+def display_playing_menu(hp, shield):
     """Displays the menu about the current running game such as HP, shield, and power ups"""
+    x, y = 20, 20
+    scaling = 2
+    width, height = 100, 40
+    border_size = 2
+
+    width *= scaling
+
+    # draw hp bar and create black border
+    bar_size = width - (100 * scaling - scaling * hp)
+    pygame.draw.rect(screen, "green", (x, y, bar_size, height))
+    pygame.draw.rect(screen, "black", (x, y, width, height), border_size)
+
+    # write hp as text
+    font = pygame.font.SysFont('Comic sans', 19, bold=True)
+    hp_text = font.render(f"{hp}/100", True, "black")
+    text_rect = hp_text.get_rect(center=(x + width // 2, y + height // 2))
+    screen.blit(hp_text, text_rect)
+
+    if shield > 0:  # draw shield bar to the left of HP bar
+        x += width
+        width, height = 25, 40
+
+        width -= border_size  # adjust borders
+        width *= scaling
+
+        # draw shield bar and create black border
+        bar_size = width - (25 * scaling - scaling * shield)
+        pygame.draw.rect(screen, "#8FFFF2", (x, y, bar_size, height))
+        pygame.draw.rect(screen, "black", (x, y, width, height), 2)
+
+        # write shield as text
+        font = pygame.font.SysFont('Comic sans', 19, bold=True)
+        hp_text = font.render(f"{shield}", True, "black")
+        text_rect = hp_text.get_rect(center=(x + width // 2, y + height // 2))
+        screen.blit(hp_text, text_rect)
 
 
 def spawn_egg(prev_loc):
@@ -216,6 +251,7 @@ while running:
                 screen.blit(player_surf, player_rect)
 
         print(player_hp, player_shield)
+        display_playing_menu(player_hp, player_shield)
         # handle player collision
         for i in range(len(eggs)):
             egg_rect, egg_type, destroyed, visible = eggs[i]
