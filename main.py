@@ -11,6 +11,7 @@ import sys
 import pygame
 import time
 from random import randint
+from collections import namedtuple
 
 
 def dev_grid():
@@ -61,6 +62,20 @@ def display_scores(scores):
         screen.blit(score_text, (x_pos, y_pos))
 
 
+def display_main_menu():
+    """Display the main menu with game title, leaderboard, and character selection"""
+    display_scores(scores)
+
+    # write the game's title on the screen
+    game_name = 'EGG JUMP'
+    title_font = pygame.font.Font("font/MainluxLight-DOAJx.otf", 110)
+    text_surface = title_font.render(game_name, True, "#FFF6F6")
+    text_rect = text_surface.get_rect(center=(307, 90))
+    screen.blit(text_surface, text_rect)
+
+    # todo: display playable characters which are resized
+
+
 def display_playing_menu(hp, shield):
     """Displays the menu about the current running game such as HP, shield, and power ups"""
     x, y = 20, 20
@@ -96,72 +111,72 @@ def display_playing_menu(hp, shield):
         # write shield as text
         font = pygame.font.SysFont('Comic sans', 19, bold=True)
         hp_text = font.render(f"{shield}", True, "black")
-        text_rect = hp_text.get_rect(center=(x + width // 2, y + height // 2))
+        text_rect = hp_text.get_rect(center=(x + width / 2, y + height / 2))
         screen.blit(hp_text, text_rect)
 
+    # if power_up != None:  # draw icon
+    #     ...
 
-def spawn_egg(prev_loc, frame):
-    """Spawn eggs based on current phase and previous egg location
-    Makes sure that 2 eggs are not too close together, so it is always possible to win
-    :returns egg tuple: (egg_rect: Surface, egg_type: str, is_destroyed: bool, stays_visible: bool)"""
+
+def get_egg(prev_loc, frame):
+    """Returns an Egg object based on current phase and previous egg location
+    Makes sure that 2 eggs are not too close together, so it is always possible to win"""
     phase = get_phase(frame)
 
     # phase 1: only spawn normal eggs
     if phase == 1:
         # ensure eggs aren't too close to each other and have some variation
         left = max(MIN_EGG_DIST + prev_loc + randint(0, 150), randint(800, 1100))
-        return egg_surf.get_rect(bottomleft=(left, GROUND_Y)), "normal", False, True
+        return Egg(egg_surf.get_rect(bottomleft=(left, GROUND_Y)), "normal", False, True)
 
     # phase 2: spawn normal and fried eggs with equal probability
     elif phase == 2:
         if randint(0, 1) == 0:  # spawn normal egg
             left = max(MIN_EGG_DIST + prev_loc + randint(0, 150), randint(800, 1100))
-            return egg_surf.get_rect(bottomleft=(left, GROUND_Y)), "normal", False, True
+            return Egg(egg_surf.get_rect(bottomleft=(left, GROUND_Y)), "normal", False, True)
         else:  # spawn fried egg, these can be closer together
             left = max(MIN_EGG_DIST + prev_loc + randint(-35, 120), randint(800, 950))
-            return egg_surf_fried.get_rect(bottomleft=(left, GROUND_Y)), "fried", False, True
+            return Egg(egg_surf_fried.get_rect(bottomleft=(left, GROUND_Y)), "fried", False, True)
 
     # phase 3: spawn eggs with 30/30/20/20 chance respectively
     elif phase == 3:
         type_egg = randint(1, 10)
         if type_egg <= 3:  # spawn normal egg
             left = max(MIN_EGG_DIST + prev_loc + randint(0, 150), randint(800, 1100))
-            return egg_surf.get_rect(bottomleft=(left, GROUND_Y)), "normal", False, True
+            return Egg(egg_surf.get_rect(bottomleft=(left, GROUND_Y)), "normal", False, True)
         elif type_egg <= 6:  # spawn fried egg, these can be closer together
             left = max(MIN_EGG_DIST + prev_loc + randint(-35, 120), randint(800, 950))
-            return egg_surf_fried.get_rect(bottomleft=(left, GROUND_Y)), "fried", False, True
+            return Egg(egg_surf_fried.get_rect(bottomleft=(left, GROUND_Y)), "fried", False, True)
         elif type_egg <= 8:  # spawn flying egg, jump or duck
             left = max(MIN_EGG_DIST + prev_loc + randint(30, 150), randint(800, 1000))
-            return egg_surf_flying.get_rect(bottomleft=(left, GROUND_Y - 35)), "flying", False, True
+            return Egg(egg_surf_flying.get_rect(bottomleft=(left, GROUND_Y - 35)), "flying", False, True)
         else:  # spawn flying egg, must duck
             left = max(MIN_EGG_DIST + prev_loc + randint(30, 150), randint(800, 1000))
-            return egg_surf_flying2.get_rect(bottomleft=(left, GROUND_Y - 35)), "flying2", False, True
+            return Egg(egg_surf_flying2.get_rect(bottomleft=(left, GROUND_Y - 35)), "flying2", False, True)
 
     # phase 4: spawn eggs with 30/30/20/20 chance respectively
     # there is a 50% chance the egg will slowly become invisible (it can still kill you)
-    elif phase == 4:
-        type_egg = randint(0, 3)
+    else:
+        type_egg = randint(1, 10)
         visible = randint(0, 1)
-        if type_egg == 0:  # spawn normal egg
+        if type_egg <= 3:  # spawn normal egg
             left = max(MIN_EGG_DIST + prev_loc + randint(0, 150), randint(800, 1100))
-            return egg_surf.get_rect(bottomleft=(left, GROUND_Y)), "normal", False, visible
-        elif type_egg == 1:  # spawn fried egg, these can be closer together
-            left = max(MIN_EGG_DIST + prev_loc + randint(-35, 120), randint(800, 950))
-            return egg_surf_fried.get_rect(bottomleft=(left, GROUND_Y)), "fried", False, visible
-        elif type_egg == 2:  # spawn flying egg, jump or duck
+            return Egg(egg_surf.get_rect(bottomleft=(left, GROUND_Y)), "normal", False, visible)
+        elif type_egg <= 6:  # spawn fried egg, these can be closer together
+            left = max(MIN_EGG_DIST + prev_loc + randint(-55, 120), randint(800, 950))
+            return Egg(egg_surf_fried.get_rect(bottomleft=(left, GROUND_Y)), "fried", False, visible)
+        elif type_egg <= 8:  # spawn flying egg, jump or duck
             left = max(MIN_EGG_DIST + prev_loc + randint(30, 150), randint(800, 1000))
-            return egg_surf_flying.get_rect(bottomleft=(left, GROUND_Y - 35)), "flying", False, visible
+            return Egg(egg_surf_flying.get_rect(bottomleft=(left, GROUND_Y - 35)), "flying", False, visible)
         else:  # spawn flying egg, must duck
             left = max(MIN_EGG_DIST + prev_loc + randint(30, 150), randint(800, 1000))
-            return egg_surf_flying2.get_rect(bottomleft=(left, GROUND_Y - 35)), "flying2", False, visible
-    else:
-        raise NotImplementedError
+            return Egg(egg_surf_flying2.get_rect(bottomleft=(left, GROUND_Y - 35)), "flying2", False, visible)
 
 
 def get_phase(frame):
     """Gets the current game phase based on the current frame"""
     if frame < 900:
-        return 1
+        return 4
     elif frame < 1800:
         return 2
     elif frame < 2700:
@@ -211,6 +226,7 @@ player_surf_2 = pygame.image.load("graphics/player/player_walk_2.png").convert_a
 player_surf_jump = pygame.image.load("graphics/player/player_jump.png").convert_alpha()
 player_surf_crawl = pygame.image.load("graphics/player/player_crawl_1.png").convert_alpha()
 player_surf_crawl_2 = pygame.image.load("graphics/player/player_crawl_2.png").convert_alpha()
+player_surf_fly = pygame.image.load("graphics/player/player_fly.png").convert_alpha()
 player_rect = player_surf.get_rect(bottomleft=(25, GROUND_Y))
 
 # Load egg/obstacle assets
@@ -218,23 +234,37 @@ egg_surf = pygame.image.load("graphics/egg/egg_normal.png").convert_alpha()  # n
 egg_surf_fried = pygame.image.load("graphics/egg/egg_fried.png").convert_alpha()  # fried egg
 egg_surf_flying = pygame.image.load("graphics/egg/egg_flying.png").convert_alpha()  # flying egg
 egg_surf_flying2 = pygame.image.load("graphics/egg/egg_flying_2.png").convert_alpha()  # big flying egg
-get_surf = {"normal": egg_surf,
-            "fried": egg_surf_fried,
-            "flying": egg_surf_flying,
-            "flying2": egg_surf_flying2}
+get_egg_surf = {"normal": egg_surf,
+                "fried": egg_surf_fried,
+                "flying": egg_surf_flying,
+                "flying2": egg_surf_flying2}
+Egg = namedtuple("Egg", ["rect", "type", "destroyed", "visible"])
+
+# load power up assets
+hp_surf = pygame.image.load("graphics/power_ups/hp.png").convert_alpha()  # normal egg
+
+get_boost_surf = {"health": hp_surf,
+                  "regenerate": ...,
+                  "fly": ...}
+# Power up objects that spawn on the map
+# .value contains: heal amount for HP, heal amount per tick for regen, flying timer for fly
+Power_up = namedtuple("Power_up", ["rect", "type", "value"])
+
+# Power up that the player currently has
+Player_power_up = namedtuple("Player_power_up", ["type", "value"])
 
 frame = 0
 screen.fill("black")
 start_time = time.time()
 player_hp = 100
 player_shield = 25
-player_state = "walking"
 eggs = []
-flying_timer = 0
+current_power_up = Player_power_up("", 0)  # no power up
 
 while running:
-    # Poll for events
-    for event in pygame.event.get():
+    # check for EXIT and restart game
+    frame_events = pygame.event.get()
+    for event in frame_events:
         # pygame.QUIT --> user clicked X to close your window
         if event.type == pygame.QUIT:
             running = False
@@ -243,31 +273,16 @@ while running:
         if not is_playing and event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
             is_playing = True
 
-    keys = pygame.key.get_pressed()  # check for held down keys
     if is_playing:
-        # check if player is crawling, walking, or flying
-        if keys[pygame.K_DOWN] and player_rect.bottom == GROUND_Y:
-            player_state = "crawling"
-        elif flying_timer > 0:
-            player_state = "flying"
-        else:
-            player_state = "walking"
-
-        # player does an action
-        if ((keys[pygame.K_SPACE] or keys[pygame.K_UP])  # jump
-                and player_rect.bottom >= GROUND_Y):
-            players_gravity = JUMP_GRAVITY_START_SPEED
-        elif keys[pygame.K_DOWN] and player_rect.bottom < GROUND_Y:  # drop down from the air
-            players_gravity = max(players_gravity, 10)
-
-    if is_playing:
-        screen.fill("purple")  # Wipe the screen
-
-        # Blit the level assets
+        screen.fill("purple")  # wipe the screen
+        # display the game's background
         screen.blit(sky_surf, (0, 0))
         screen.blit(ground_surf, (0, GROUND_Y))
 
-        # draw score counter
+        # display health and shield bars
+        display_playing_menu(player_hp, player_shield)
+
+        # display score counter
         cur_score = frame // 4
         score_surf = game_font.render(f"SCORE: {cur_score}", False, "Black")
         score_rect = score_surf.get_rect(center=(400, 40))
@@ -275,63 +290,79 @@ while running:
         pygame.draw.rect(screen, "#c0e8ec", score_rect, 10)
         screen.blit(score_surf, score_rect)
 
-        # Move and display all eggs
-        for i in reversed(range(len(eggs))):
-            egg_rect, egg_type, destroyed, visible = eggs[i]
-            egg_rect.x -= get_obstacle_speed(frame)
-            if egg_rect.right <= 0:  # replace egg with a new one
-                eggs.pop(i)
-                eggs.append(spawn_egg(eggs[-1][0].right, frame))
-            egg_surf_temp = get_surf[egg_type]
-            if not visible:  # this type of eggs gradually turns invisible
-                egg_surf_temp.set_alpha(255 * (egg_rect.x - 200) / WIDTH)
-            else:
-                egg_surf_temp.set_alpha(255)
-            screen.blit(egg_surf_temp, egg_rect)
+        # handle player actions
+        keys = pygame.key.get_pressed()
+        # [space] or [up_arrow] to jump, you can hold down keys
+        if ((keys[pygame.K_SPACE] or keys[pygame.K_UP])
+                and player_rect.bottom >= GROUND_Y):
+            players_gravity = JUMP_GRAVITY_START_SPEED
+        # [down_arrow] to drop down from a jump or flying
+        elif (any(event.type == pygame.KEYDOWN and event.key == pygame.K_DOWN for event in frame_events)
+              and player_rect.bottom < GROUND_Y):
+            players_gravity = max(players_gravity, 10)
+            if current_power_up.type == "flying":  # stop flying
+                current_power_up = Player_power_up("", 0)  # reset power up
 
-        # Adjust player's vertical location then blit it
-        players_gravity += 1
-        player_rect.y += players_gravity
-        player_rect.bottom = min(GROUND_Y, player_rect.bottom)  # don't go below ground
-
-        if player_state == "walking":
-            if player_rect.bottom != GROUND_Y:  # use jump animation
-                player_rect = player_surf_jump.get_rect(bottomleft=(25, player_rect.bottom))
-                screen.blit(player_surf_jump, player_rect)
-            else:  # on the ground, check if ducking or determine animation based on frame
-                if frame % 20 < 10:
-                    player_rect = player_surf_2.get_rect(bottomleft=(25, player_rect.bottom))
-                    screen.blit(player_surf_2, player_rect)
-                else:
-                    player_rect = player_surf.get_rect(bottomleft=(25, player_rect.bottom))
-                    screen.blit(player_surf, player_rect)
-        elif player_state == "crawling":
+        # player is crawling
+        if keys[pygame.K_DOWN] and player_rect.bottom == GROUND_Y:
             if frame % 20 < 10:  # animate based on frame
                 player_rect = player_surf_crawl.get_rect(bottomleft=(15, player_rect.bottom))
                 screen.blit(player_surf_crawl, player_rect)
             else:
                 player_rect = player_surf_crawl_2.get_rect(bottomleft=(15, player_rect.bottom))
                 screen.blit(player_surf_crawl_2, player_rect)
+        # player is flying
+        elif current_power_up.type == "flying" and current_power_up.value > 0:
+            player_rect = player_surf_fly.get_rect(topleft=(15, 80))
+            screen.blit(player_surf_fly, player_rect)
+        # player is walking or jumping
+        else:
+            if player_rect.bottom != GROUND_Y:  # use jump animation
+                player_rect = player_surf_jump.get_rect(bottomleft=(25, player_rect.bottom))
+                screen.blit(player_surf_jump, player_rect)
+            else:  # on the ground, determine animation based on frame
+                if frame % 20 < 10:
+                    player_rect = player_surf_2.get_rect(bottomleft=(25, player_rect.bottom))
+                    screen.blit(player_surf_2, player_rect)
+                else:
+                    player_rect = player_surf.get_rect(bottomleft=(25, player_rect.bottom))
+                    screen.blit(player_surf, player_rect)
 
-        # display health and shield bars
-        display_playing_menu(player_hp, player_shield)
+        # adjust player's vertical location then blit it
+        players_gravity += 1
+        player_rect.y += players_gravity
+        player_rect.bottom = min(GROUND_Y, player_rect.bottom)  # don't go below ground
 
-        # handle player collision
+        # move and display all eggs
+        for i in reversed(range(len(eggs))):
+            egg = eggs[i]
+            egg.rect.x -= get_obstacle_speed(frame)
+            if egg.rect.right <= 0:  # replace egg with a new one
+                eggs.pop(i)
+                eggs.append(get_egg(eggs[-1].rect.right, frame))
+            egg_surf_temp = get_egg_surf[egg.type]
+            if not egg.visible:  # this type of eggs gradually turns invisible
+                egg_surf_temp.set_alpha(255 * (egg.rect.x - 200) / WIDTH)
+            else:
+                egg_surf_temp.set_alpha(255)
+            screen.blit(egg_surf_temp, egg.rect)
+
+        # handle player-egg collision
         for i in range(len(eggs)):
-            egg_rect, egg_type, destroyed, visible = eggs[i]
+            egg = eggs[i]
             # no collisions or egg has already hit player once
-            if not egg_rect.colliderect(player_rect) or destroyed:
+            if not egg.rect.colliderect(player_rect) or egg.destroyed:
                 continue
-            eggs[i] = (egg_rect, egg_type, True, visible)  # make sure the same egg doesn't deal damage again
+            eggs[i] = Egg(egg.rect, egg.type, True, egg.visible)  # make sure the same egg doesn't deal damage again
 
             # normal egg: instant kill or break shield
-            if egg_type == "normal" or egg_type == "flying" or egg_type == "flying2":
+            if egg.type == "normal" or egg.type == "flying" or egg.type == "flying2":
                 if player_shield > 0:
                     player_shield = 0
                 else:
                     player_hp = 0
             # fried egg: take 20 damage
-            elif egg_type == "fried":
+            elif egg.type == "fried":
                 if player_shield > 0:
                     player_shield = max(0, player_shield - 20)
                 else:
@@ -339,7 +370,7 @@ while running:
 
             if player_hp <= 0:  # lost game
                 is_playing = False
-
+        # for i in range(len())
 
     # When game is over, save score and display menu
     else:
@@ -359,17 +390,16 @@ while running:
         frame = 0  # reset score counter
         player_hp = 100
         player_shield = 25
-        player_state = "walking"
-        flying_timer = 0
+        current_power_up = Player_power_up("", 0)  # no power up
 
-        # spawn phase 1 eggs
-        eggs = [spawn_egg(800, frame)]
-        eggs.append(spawn_egg(eggs[-1][0].right, frame))
-        eggs.append(spawn_egg(eggs[-1][0].right, frame))
-        eggs.append(spawn_egg(eggs[-1][0].right, frame))
+        # spawn phase 1 eggs and space them out
+        eggs = [get_egg(800, frame)]
+        eggs.append(get_egg(eggs[-1].rect.right, frame))
+        eggs.append(get_egg(eggs[-1].rect.right, frame))
+        eggs.append(get_egg(eggs[-1].rect.right, frame))
 
         # load menu
-        display_scores(scores)
+        display_main_menu()
 
     if DEVELOPER_MODE:  # DEBUG FEATURES
         dev_grid()
