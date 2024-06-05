@@ -43,6 +43,13 @@ def dev_grid():
             print("LOW FPS WARNING", file=sys.stderr)
 
 
+def add_score(scores, to_add):
+    """add a score to the list of top 10 scores and keep scores sorted"""
+    scores.append(to_add)
+    scores.sort(reverse=True)  # sort to remove smallest score
+    scores.pop()
+
+
 def display_scores(scores):
     """Displays the top 10 scores on the game menu"""
     x_pos = 620  # top-left corner of scores display
@@ -118,6 +125,70 @@ def display_playing_menu(hp, shield):
     #     ...
 
 
+def handle_egg_objects():
+    """Does the following actions on each egg objects:
+    1. move towards player and display it
+    2. check for collision with player and change player HP if needed"""
+    global player_hp, player_shield
+    for i in reversed(range(len(eggs))):
+        egg = eggs[i]
+
+        # move egg
+        egg.rect.x -= get_obstacle_speed(frame)
+        if egg.rect.right <= 0:  # replace egg with a new one
+            eggs.pop(i)
+            eggs.append(get_egg(eggs[-1].rect.right, frame))
+            continue
+
+        # display egg
+        egg_surf_temp = get_egg_surf[egg.type]
+        if not egg.visible:  # this type of eggs gradually turns invisible
+            egg_surf_temp.set_alpha(255 * (egg.rect.x - 300) / WIDTH)
+        else:
+            egg_surf_temp.set_alpha(255)
+        screen.blit(egg_surf_temp, egg.rect)
+
+        # handle player-egg collision
+        # no collisions or egg has already hit player once
+        if not egg.rect.colliderect(player_rect) or egg.destroyed:
+            continue
+        eggs[i] = Egg(egg.rect, egg.type, True, egg.visible)  # make sure the same egg doesn't deal damage again
+
+        # normal egg: instant kill or break shield
+        if egg.type == "normal" or egg.type == "flying" or egg.type == "flying2":
+            if player_shield > 0:
+                player_shield = 0
+            else:
+                player_hp = 0
+        # fried egg: take 20 damage
+        elif egg.type == "fried":
+            if player_shield > 0:
+                player_shield = max(0, player_shield - 20)
+            else:
+                player_hp -= 20
+
+
+def handle_power_up_objects():
+    global current_power_up
+    for i in reversed(range(len(power_ups))):
+        power_up_obj = power_ups[i]
+        # move power up towards player
+        power_up_obj.rect.x -= get_obstacle_speed(frame)
+        if power_up_obj.rect.right <= 0:  # out of map, remove it
+            power_ups.pop(i)
+            continue
+
+        # display power up
+        power_up_surf_temp = get_power_up_surf[power_up_obj.type]
+        screen.blit(power_up_surf_temp, power_up_obj.rect)
+
+        # check for collisions
+        if not power_ups[i].rect.colliderect(player_rect):  # no collision
+            continue
+        current_power_up = Player_power_up(power_ups[i].type, power_ups[i].value)
+        power_ups.pop(i)  # don't pick up power-up twice
+
+
 def get_egg(prev_loc, frame):
     """Returns an Egg object based on current phase and previous egg location
     Makes sure that 2 eggs are not too close together, so it is always possible to win"""
@@ -173,6 +244,13 @@ def get_egg(prev_loc, frame):
             return Egg(egg_surf_flying2.get_rect(bottomleft=(left, GROUND_Y - 35)), "flying2", False, visible)
 
 
+def get_power_up(location):
+    """Spawns a power up object
+    todo: add more options"""
+    num = randint(1, 10)
+    return Power_up(hp_surf.get_rect(bottomleft=(location, GROUND_Y)), "health", 20)
+
+
 def get_phase(frame):
     """Gets the current game phase based on the current frame"""
     if frame < 900:
@@ -215,6 +293,12 @@ GROUND_Y = 300  # The Y-coordinate of the ground level
 JUMP_GRAVITY_START_SPEED = -17  # The speed at which the player jumps
 players_gravity = 0  # The current speed at which the player falls
 
+# load scores from leaderboard
+with open("leaderboard.txt", "r") as leaderboard:
+    scores = [0] * 10
+    for score in leaderboard.readlines():  # add top scores
+        add_score(scores, int(score))
+
 # Load level assets
 sky_surf = pygame.image.load("graphics/level/sky.png").convert()
 ground_surf = pygame.image.load("graphics/level/ground.png").convert()
@@ -242,10 +326,10 @@ Egg = namedtuple("Egg", ["rect", "type", "destroyed", "visible"])
 
 # load power up assets
 hp_surf = pygame.image.load("graphics/power_ups/hp.png").convert_alpha()  # normal egg
+get_power_up_surf = {"health": hp_surf,
+                     "regenerate": ...,
+                     "fly": ...}
 
-get_boost_surf = {"health": hp_surf,
-                  "regenerate": ...,
-                  "fly": ...}
 # Power up objects that spawn on the map
 # .value contains: heal amount for HP, heal amount per tick for regen, flying timer for fly
 Power_up = namedtuple("Power_up", ["rect", "type", "value"])
@@ -259,6 +343,7 @@ start_time = time.time()
 player_hp = 100
 player_shield = 25
 eggs = []
+power_ups = []
 current_power_up = Player_power_up("", 0)  # no power up
 
 while running:
@@ -301,8 +386,15 @@ while running:
               and player_rect.bottom < GROUND_Y):
             players_gravity = max(players_gravity, 10)
             if current_power_up.type == "flying":  # stop flying
+                players_gravity = 10
                 current_power_up = Player_power_up("", 0)  # reset power up
 
+        # adjust player's vertical location then blit it
+        players_gravity += 1
+        player_rect.y += players_gravity
+        player_rect.bottom = min(GROUND_Y, player_rect.bottom)  # don't go below ground
+
+        # check for updates in the player state
         # player is crawling
         if keys[pygame.K_DOWN] and player_rect.bottom == GROUND_Y:
             if frame % 20 < 10:  # animate based on frame
@@ -328,61 +420,22 @@ while running:
                     player_rect = player_surf.get_rect(bottomleft=(25, player_rect.bottom))
                     screen.blit(player_surf, player_rect)
 
-        # adjust player's vertical location then blit it
-        players_gravity += 1
-        player_rect.y += players_gravity
-        player_rect.bottom = min(GROUND_Y, player_rect.bottom)  # don't go below ground
+        handle_egg_objects()
+        if player_hp <= 0:  # lost game
+            is_playing = False
 
-        # move and display all eggs
-        for i in reversed(range(len(eggs))):
-            egg = eggs[i]
-            egg.rect.x -= get_obstacle_speed(frame)
-            if egg.rect.right <= 0:  # replace egg with a new one
-                eggs.pop(i)
-                eggs.append(get_egg(eggs[-1].rect.right, frame))
-            egg_surf_temp = get_egg_surf[egg.type]
-            if not egg.visible:  # this type of eggs gradually turns invisible
-                egg_surf_temp.set_alpha(255 * (egg.rect.x - 200) / WIDTH)
-            else:
-                egg_surf_temp.set_alpha(255)
-            screen.blit(egg_surf_temp, egg.rect)
+        # spawn power-ups around every 1500 frames
+        if randint(0, 1500) == 0:
+            power_ups.append(get_power_up(800))
+        handle_power_up_objects()
 
-        # handle player-egg collision
-        for i in range(len(eggs)):
-            egg = eggs[i]
-            # no collisions or egg has already hit player once
-            if not egg.rect.colliderect(player_rect) or egg.destroyed:
-                continue
-            eggs[i] = Egg(egg.rect, egg.type, True, egg.visible)  # make sure the same egg doesn't deal damage again
-
-            # normal egg: instant kill or break shield
-            if egg.type == "normal" or egg.type == "flying" or egg.type == "flying2":
-                if player_shield > 0:
-                    player_shield = 0
-                else:
-                    player_hp = 0
-            # fried egg: take 20 damage
-            elif egg.type == "fried":
-                if player_shield > 0:
-                    player_shield = max(0, player_shield - 20)
-                else:
-                    player_hp -= 20
-
-            if player_hp <= 0:  # lost game
-                is_playing = False
-        # for i in range(len())
+        if current_power_up.type == "health":
+            player_hp = min(100, player_hp + current_power_up.value)
+            current_power_up = Player_power_up("", 0)  # no power up
 
     # When game is over, save score and display menu
     else:
-        with open("leaderboard.txt", "r") as leaderboard:  # save score to leaderboard
-            scores = [0] * 10
-            scores.extend([int(x) for x in leaderboard.readlines()])  # read top 10 scores
-            scores.append(frame // 4)  # add current score
-            scores.sort(reverse=True)  # sort scores high to low
-            while len(scores) > 10:
-                scores.pop()  # remove smallest score
-        with open("leaderboard.txt", "w") as leaderboard:  # save score
-            leaderboard.write("\n".join(map(str, scores)))  # store as string
+        add_score(scores, frame // 4)  # add current score
 
         # reset game
         screen.fill("black")
@@ -390,6 +443,7 @@ while running:
         frame = 0  # reset score counter
         player_hp = 100
         player_shield = 25
+        power_ups = []
         current_power_up = Player_power_up("", 0)  # no power up
 
         # spawn phase 1 eggs and space them out
@@ -408,5 +462,10 @@ while running:
     pygame.display.flip()
     frame += 1
     clock.tick(60)  # limits FPS to 60
+
+# save score as strings on each line before exiting code
+with open("leaderboard.txt", "w") as leaderboard:
+    add_score(scores, frame // 4)  # save player's score before they exited
+    leaderboard.write("\n".join(map(str, scores)))
 
 pygame.quit()
