@@ -2,9 +2,6 @@
 
 A game similar to the famous Chrome Dino Game, built using pygame.
 Made by intern: @bassemfarid, no one or nothing else.
-
-Each egg is consisted of the following information:
-(rect, type, destroyed, visible)
 """
 
 import sys
@@ -37,7 +34,7 @@ def dev_grid():
     screen.blit(grid_surface, (0, 0))  # display grid line on main screen
 
     # 2: Check FPS every 5 seconds
-    if frame % 300 == 0 and is_playing:
+    if frame % 300 == 0 and game_state == "playing":
         t = time.time() - start_time
         fps = round(frame / t, 2)
         print(f"Frame: {frame}, Time: {round(t, 2)} , FPS: {fps}")  # ensure 60 fps
@@ -127,23 +124,27 @@ def display_player_health(hp, shield):
 
 
 def display_player_power_up():
-    # if current_power_up == no_power_up:
-    #     return
+    """Displays the player's current power up and how much time
+    there is remaining if you currently have one active"""
+    if current_power_up == no_power_up:
+        return
     x, y = 560, 20
     width, height = 140, 40
     border_width = 2
 
-    if current_power_up.type == "health":
-        ...
-    elif current_power_up.type == "shield":
-        ...
-    elif current_power_up.type == "fly":
-        ...
-    elif current_power_up.type == "small":
-        ...
+    # draw the power up icon, scale it down to fit in the bar
+    icon_surf = get_power_up_surf[current_power_up.type]
+    icon_surf = pygame.transform.scale(icon_surf, (height, height))
+    icon_rect = icon_surf.get_rect(topleft=(x - height, y))
+    screen.blit(icon_surf, icon_rect)
+
+    # fill in the bar to represent how much time the power up has left
+    max_val = get_max_power_up_val[current_power_up.type]
+    power_up_color = get_power_up_color[current_power_up.type]
+    bar_width = width * (current_power_up.value / max_val)
+    pygame.draw.rect(screen, power_up_color, (x, y, bar_width, height))
 
     # draw borders
-    pygame.draw.rect(screen, "black", (x - 40, y, 40, height), border_width)
     pygame.draw.rect(screen, "black", (x, y, width, height), border_width)
 
 
@@ -286,14 +287,12 @@ def get_power_up():
     if player_shield > 20:
         choices.remove("shield")
     chosen = random.choice(choices)
-    if chosen == "health":  # healing 20 hp
-        return Power_up(health_surf.get_rect(bottomleft=(location, GROUND_Y)), "health", 100)
-    elif chosen == "shield":  # gain 15 shield
-        return Power_up(shield_surf.get_rect(bottomleft=(location, GROUND_Y)), "shield", 75)
-    elif chosen == "fly":  # flying for 7 seconds (7*60 frames)
-        return Power_up(fly_surf.get_rect(bottomleft=(location, GROUND_Y)), "fly", 7 * 60)
-    else:  # make player small for 7 seconds (7*60 frames)
-        return Power_up(small_surf.get_rect(bottomleft=(location, GROUND_Y)), "small", 7 * 60)
+
+    # create Power_up object
+    coordinates = (location, GROUND_Y)
+    surf = get_power_up_surf[chosen]
+    value = get_max_power_up_val[chosen]
+    return Power_up(surf.get_rect(bottomleft=coordinates), chosen, value)
 
 
 def get_phase(frame):
@@ -319,7 +318,7 @@ def get_obstacle_speed(frame):
         return fastest
 
 
-DEVELOPER_MODE = False
+DEVELOPER_MODE = True
 
 # Initialize Pygame and create a window
 pygame.init()
@@ -329,15 +328,9 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 running = True  # Pygame main loop, kills the pygame when False
 
-# Egg constants
+# constants
 MIN_EGG_DIST = 120  # minimum distance between eggs
-
-# Game state variables
-is_playing = False  # Whether the game is currently being played
 GROUND_Y = 300  # The Y-coordinate of the ground level
-JUMP_GRAVITY_START_SPEED = -17  # The speed at which the player jumps
-players_fall_speed = 0  # The current speed at which the player falls
-gravity = 1  # acceleration from gravity
 
 # load scores from leaderboard
 with open("leaderboard.txt", "r") as leaderboard:
@@ -378,6 +371,14 @@ get_power_up_surf = {"health": health_surf,
                      "shield": shield_surf,
                      "fly": fly_surf,
                      "small": small_surf}
+get_max_power_up_val = {"health": 100,  # heal 20 HP
+                        "shield": 75,  # gain 15 shield
+                        "fly": 7 * 60,  # fly for 7 seconds
+                        "small": 7 * 60}
+get_power_up_color = {"health": "#FF0213",
+                      "shield": "#5CE4FF",
+                      "fly": "#FFD4FF",
+                      "small": "#CCFFFF"}
 
 # Power up objects that spawn on the map
 # .value can contain: heal amount, shield gain amount, flying timer, new gravity value for jump
@@ -387,7 +388,13 @@ Power_up = namedtuple("Power_up", ["rect", "type", "value"])
 Player_power_up = namedtuple("Player_power_up", ["type", "value"])
 no_power_up = Player_power_up("", 0)
 
-frame = 0
+# default game state variables
+game_state = "menu"  # determines the current state of the game (menu/died/playing)
+jump_start_speed = -17  # The speed at which the player jumps
+players_fall_speed = 0  # The current speed at which the player falls
+gravity = 1  # acceleration from gravity
+
+frame = 0  # used to keep track of score
 screen.fill("black")
 start_time = time.time()
 player_hp = 100
@@ -397,18 +404,13 @@ power_ups = []
 current_power_up = no_power_up
 
 while running:
-    # check for EXIT and restart game
     frame_events = pygame.event.get()
+    # check if user pressed X and want to exit game
     for event in frame_events:
-        # pygame.QUIT --> user clicked X to close your window
         if event.type == pygame.QUIT:
             running = False
 
-        # When player wants to play again by pressing SPACE
-        if not is_playing and event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-            is_playing = True
-
-    if is_playing:
+    if game_state == "playing":
         screen.fill("purple")  # wipe the screen
         # display the game's background
         screen.blit(sky_surf, (0, 0))
@@ -431,18 +433,18 @@ while running:
         # [space] or [up_arrow] to jump, you can hold down keys
         if ((keys[pygame.K_SPACE] or keys[pygame.K_UP])
                 and player_rect.bottom >= GROUND_Y):
-            players_fall_speed = JUMP_GRAVITY_START_SPEED
+            players_fall_speed = jump_start_speed
         # [down_arrow] to drop down from a jump or flying
         elif (any(event.type == pygame.KEYDOWN and event.key == pygame.K_DOWN for event in frame_events)
               and player_rect.bottom < GROUND_Y):
-            players_fall_speed = max(players_fall_speed, 13)
+            players_fall_speed = max(players_fall_speed, -jump_start_speed * 0.75)
             if current_power_up.type == "fly":  # stop flying
-                players_fall_speed = 13
+                players_fall_speed = -jump_start_speed * 0.75
                 current_power_up = no_power_up
 
         # handle player's current power up and update if needed
         display_player_power_up()
-        gravity = 1
+        jump_start_speed = -17
         if current_power_up.type == "health":
             player_hp = min(100, player_hp + 0.2)
         elif current_power_up.type == "shield":
@@ -453,7 +455,7 @@ while running:
                 players_fall_speed = 0
         elif current_power_up.type == "small":
             # make player smaller (30px high) so you don't need to crawl, also jump higher
-            gravity = 0.75
+            jump_start_speed = -20
 
         # reduce time remaining for power up
         if current_power_up != no_power_up:
@@ -493,15 +495,42 @@ while running:
                     screen.blit(player_surf, player_rect)
 
         handle_egg_objects()
-        if player_hp <= 0:  # lost game
-            is_playing = False
+        # lost game, show death message
+        # also make all eggs visible so player can see what killed them
+        if player_hp <= 0:
+            # death message
+            game_state = "dead"
+            death_font = pygame.font.Font("font/Pixeltype.ttf", 80)
+            death_message = death_font.render("You Died", True, "red")
+            message_rect = death_message.get_rect(center=(WIDTH / 2, 120))
+            screen.blit(death_message, message_rect)
+            death_font = pygame.font.Font("font/Pixeltype.ttf", 60)
+            death_message = death_font.render("Press [SPACE] to restart", True, "red")
+            message_rect = death_message.get_rect(center=(WIDTH / 2, 200))
+            screen.blit(death_message, message_rect)
+
+            # make eggs visible
+            for egg in eggs:
+                egg_surf_temp = get_egg_surf[egg.type]
+                egg_surf_temp.set_alpha(255)
+                screen.blit(egg_surf_temp, egg.rect)
 
         # spawn power-ups around every 1500 frames
-        if randint(0, 100) == 0:
+        if randint(0, 500) == 0:
             power_ups.append(get_power_up())
         handle_power_up_objects()
 
-    # When game is over, save score and display menu
+        # update frame which is used to keep track of current score
+        frame += 1
+
+    # player just died and is in death screen, waiting to go to menu
+    elif game_state == "dead":
+        # when player wants to enter main menu by pressing SPACE
+        for event in frame_events:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                game_state = "menu"
+
+    # player is in main menu, waiting to start a game
     else:
         add_score(scores, frame // 4)  # add current score
 
@@ -523,12 +552,16 @@ while running:
         # load menu
         display_main_menu()
 
+        # when player wants to play again by pressing SPACE
+        for event in frame_events:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                game_state = "playing"
+
     if DEVELOPER_MODE:  # DEBUG FEATURES
         dev_grid()
 
     # flip() the display to put your work on screen
     pygame.display.flip()
-    frame += 1
     clock.tick(60)  # limits FPS to 60
 
 # save score as strings on each line before exiting code
