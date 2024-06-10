@@ -192,6 +192,8 @@ def handle_egg_objects():
 
 
 def handle_power_up_objects():
+    """move power up spawns towards player and check if
+    the player picked up any"""
     global current_power_up
     for i in reversed(range(len(power_ups))):
         power_up_obj = power_ups[i]
@@ -205,11 +207,73 @@ def handle_power_up_objects():
         power_up_surf_temp = get_power_up_surf[power_up_obj.type]
         screen.blit(power_up_surf_temp, power_up_obj.rect)
 
-        # check for collisions
-        if not power_ups[i].rect.colliderect(player_rect):  # no collision
-            continue
-        current_power_up = Player_power_up(power_ups[i].type, power_ups[i].value)
-        power_ups.pop(i)  # don't pick up power-up twice
+        # check for collisions and update player's power up if needed
+        if power_ups[i].rect.colliderect(player_rect):
+            current_power_up = Player_power_up(power_ups[i].type, power_ups[i].value)
+            power_ups.pop(i)  # don't pick up power-up twice
+
+
+def handle_player_state():
+    """Handle the player's current action and display it on screen,
+    Shrink the character rect if player is currently small"""
+    global player_rect
+    if player_is_small:
+        # player is flying
+        if current_power_up.type == "fly":
+            scaled_surf = pygame.transform.scale_by(player_surf_fly, 0.6)
+            player_rect = scaled_surf.get_rect(topleft=(15, 80))
+            screen.blit(scaled_surf, player_rect)
+        # player is crawling
+        elif keys[pygame.K_DOWN] and player_rect.bottom == GROUND_Y:
+            if frame % 20 < 10:  # animate based on frame
+                scaled_surf = pygame.transform.scale_by(player_surf_crawl, 0.6)
+                player_rect = scaled_surf.get_rect(bottomleft=(15, player_rect.bottom))
+                screen.blit(scaled_surf, player_rect)
+            else:
+                scaled_surf = pygame.transform.scale_by(player_surf_crawl_2, 0.6)
+                player_rect = scaled_surf.get_rect(bottomleft=(15, player_rect.bottom))
+                screen.blit(scaled_surf, player_rect)
+        # player is walking or jumping
+        else:
+            if player_rect.bottom != GROUND_Y:  # use jump animation
+                scaled_surf = pygame.transform.scale_by(player_surf_jump, 0.6)
+                player_rect = scaled_surf.get_rect(bottomleft=(25, player_rect.bottom))
+                screen.blit(scaled_surf, player_rect)
+            else:  # on the ground, determine animation based on frame
+                if frame % 20 < 10:
+                    scaled_surf = pygame.transform.scale_by(player_surf_walk, 0.6)
+                    player_rect = scaled_surf.get_rect(bottomleft=(25, player_rect.bottom))
+                    screen.blit(scaled_surf, player_rect)
+                else:
+                    scaled_surf = pygame.transform.scale_by(player_surf_walk2, 0.6)
+                    player_rect = scaled_surf.get_rect(bottomleft=(25, player_rect.bottom))
+                    screen.blit(scaled_surf, player_rect)
+
+    else:
+        # player is flying
+        if current_power_up.type == "fly":
+            player_rect = player_surf_fly.get_rect(topleft=(15, 80))
+            screen.blit(player_surf_fly, player_rect)
+        # player is crawling
+        elif keys[pygame.K_DOWN] and player_rect.bottom == GROUND_Y:
+            if frame % 20 < 10:  # animate based on frame
+                player_rect = player_surf_crawl.get_rect(bottomleft=(15, player_rect.bottom))
+                screen.blit(player_surf_crawl, player_rect)
+            else:
+                player_rect = player_surf_crawl_2.get_rect(bottomleft=(15, player_rect.bottom))
+                screen.blit(player_surf_crawl_2, player_rect)
+        # player is walking or jumping
+        else:
+            if player_rect.bottom != GROUND_Y:  # use jump animation
+                player_rect = player_surf_jump.get_rect(bottomleft=(25, player_rect.bottom))
+                screen.blit(player_surf_jump, player_rect)
+            else:  # on the ground, determine animation based on frame
+                if frame % 20 < 10:
+                    player_rect = player_surf_walk.get_rect(bottomleft=(25, player_rect.bottom))
+                    screen.blit(player_surf_walk, player_rect)
+                else:
+                    player_rect = player_surf_walk2.get_rect(bottomleft=(25, player_rect.bottom))
+                    screen.blit(player_surf_walk2, player_rect)
 
 
 def get_egg(prev_loc, frame):
@@ -318,7 +382,7 @@ def get_obstacle_speed(frame):
         return fastest
 
 
-DEVELOPER_MODE = True
+DEVELOPER_MODE = False
 
 # Initialize Pygame and create a window
 pygame.init()
@@ -343,13 +407,13 @@ sky_surf = pygame.image.load("graphics/level/sky.png").convert()
 ground_surf = pygame.image.load("graphics/level/ground.png").convert()
 
 # Load player assets
-player_surf = pygame.image.load("graphics/player/player_walk_1.png").convert_alpha()
-player_surf_2 = pygame.image.load("graphics/player/player_walk_2.png").convert_alpha()
+player_surf_walk = pygame.image.load("graphics/player/player_walk_1.png").convert_alpha()
+player_surf_walk2 = pygame.image.load("graphics/player/player_walk_2.png").convert_alpha()
 player_surf_jump = pygame.image.load("graphics/player/player_jump.png").convert_alpha()
 player_surf_crawl = pygame.image.load("graphics/player/player_crawl_1.png").convert_alpha()
 player_surf_crawl_2 = pygame.image.load("graphics/player/player_crawl_2.png").convert_alpha()
 player_surf_fly = pygame.image.load("graphics/player/player_fly.png").convert_alpha()
-player_rect = player_surf.get_rect(bottomleft=(25, GROUND_Y))
+player_rect = player_surf_walk.get_rect(bottomleft=(25, GROUND_Y))
 
 # Load egg/obstacle assets
 egg_surf = pygame.image.load("graphics/egg/egg_normal.png").convert_alpha()  # normal egg
@@ -374,14 +438,13 @@ get_power_up_surf = {"health": health_surf,
 get_max_power_up_val = {"health": 100,  # heal 20 HP
                         "shield": 75,  # gain 15 shield
                         "fly": 7 * 60,  # fly for 7 seconds
-                        "small": 7 * 60}
+                        "small": 7 * 60}  # become small for 7 seconds
 get_power_up_color = {"health": "#FF0213",
                       "shield": "#5CE4FF",
                       "fly": "#FFD4FF",
                       "small": "#CCFFFF"}
 
 # Power up objects that spawn on the map
-# .value can contain: heal amount, shield gain amount, flying timer, new gravity value for jump
 Power_up = namedtuple("Power_up", ["rect", "type", "value"])
 
 # Power up that the player currently has
@@ -399,6 +462,7 @@ screen.fill("black")
 start_time = time.time()
 player_hp = 100
 player_shield = 25
+player_is_small = False
 eggs = []
 power_ups = []
 current_power_up = no_power_up
@@ -442,9 +506,12 @@ while running:
                 players_fall_speed = -jump_start_speed * 0.75
                 current_power_up = no_power_up
 
+        # reset power up dependent variables
+        jump_start_speed = -17
+        player_is_small = False
+
         # handle player's current power up and update if needed
         display_player_power_up()
-        jump_start_speed = -17
         if current_power_up.type == "health":
             player_hp = min(100, player_hp + 0.2)
         elif current_power_up.type == "shield":
@@ -456,6 +523,7 @@ while running:
         elif current_power_up.type == "small":
             # make player smaller (30px high) so you don't need to crawl, also jump higher
             jump_start_speed = -20
+            player_is_small = True
 
         # reduce time remaining for power up
         if current_power_up != no_power_up:
@@ -468,36 +536,25 @@ while running:
         player_rect.y += players_fall_speed
         player_rect.bottom = min(GROUND_Y, player_rect.bottom)  # don't go below ground
 
-        # check for updates in the player state
-        # player is flying
-        if current_power_up.type == "fly":
-            player_rect = player_surf_fly.get_rect(topleft=(15, 80))
-            screen.blit(player_surf_fly, player_rect)
-        # player is crawling
-        elif keys[pygame.K_DOWN] and player_rect.bottom == GROUND_Y:
-            if frame % 20 < 10:  # animate based on frame
-                player_rect = player_surf_crawl.get_rect(bottomleft=(15, player_rect.bottom))
-                screen.blit(player_surf_crawl, player_rect)
-            else:
-                player_rect = player_surf_crawl_2.get_rect(bottomleft=(15, player_rect.bottom))
-                screen.blit(player_surf_crawl_2, player_rect)
-        # player is walking or jumping
-        else:
-            if player_rect.bottom != GROUND_Y:  # use jump animation
-                player_rect = player_surf_jump.get_rect(bottomleft=(25, player_rect.bottom))
-                screen.blit(player_surf_jump, player_rect)
-            else:  # on the ground, determine animation based on frame
-                if frame % 20 < 10:
-                    player_rect = player_surf_2.get_rect(bottomleft=(25, player_rect.bottom))
-                    screen.blit(player_surf_2, player_rect)
-                else:
-                    player_rect = player_surf.get_rect(bottomleft=(25, player_rect.bottom))
-                    screen.blit(player_surf, player_rect)
+        # check for player actions like jumping
+        handle_player_state()
 
+        # update the states of egg objects
         handle_egg_objects()
+
+        # spawn power-ups around every 500 frames
+        if randint(0, 500) == 0:
+            power_ups.append(get_power_up())
+        handle_power_up_objects()
+
         # lost game, show death message
         # also make all eggs visible so player can see what killed them
         if player_hp <= 0:
+            # make eggs visible
+            for egg in eggs:
+                egg_surf_temp = get_egg_surf[egg.type]
+                egg_surf_temp.set_alpha(255)
+                screen.blit(egg_surf_temp, egg.rect)
             # death message
             game_state = "dead"
             death_font = pygame.font.Font("font/Pixeltype.ttf", 80)
@@ -509,23 +566,12 @@ while running:
             message_rect = death_message.get_rect(center=(WIDTH / 2, 200))
             screen.blit(death_message, message_rect)
 
-            # make eggs visible
-            for egg in eggs:
-                egg_surf_temp = get_egg_surf[egg.type]
-                egg_surf_temp.set_alpha(255)
-                screen.blit(egg_surf_temp, egg.rect)
-
-        # spawn power-ups around every 1500 frames
-        if randint(0, 500) == 0:
-            power_ups.append(get_power_up())
-        handle_power_up_objects()
-
         # update frame which is used to keep track of current score
         frame += 1
 
     # player just died and is in death screen, waiting to go to menu
     elif game_state == "dead":
-        # when player wants to enter main menu by pressing SPACE
+        # player wants to enter main menu by pressing SPACE
         for event in frame_events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 game_state = "menu"
@@ -540,6 +586,7 @@ while running:
         frame = 0  # reset score counter
         player_hp = 100
         player_shield = 25
+        player_is_small = False
         power_ups = []
         current_power_up = no_power_up
 
@@ -552,7 +599,7 @@ while running:
         # load menu
         display_main_menu()
 
-        # when player wants to play again by pressing SPACE
+        # check if player selected a character and wants to start a new game
         for event in frame_events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 game_state = "playing"
