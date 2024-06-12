@@ -6,45 +6,46 @@ Made by intern: @bassemfarid, no one or nothing else.
 
 import sys
 import pygame
+
 import time
 from random import randint
 import random
 from collections import namedtuple
-from math import ceil
+from math import ceil, log2
 
 
-def run_debug():
-    """
-    Create coordinate grid for easy drawing and check frame rate
-    """
-    # 1. Draw grid
-    grid_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    for i in range(0, WIDTH, 100):  # big vertical lines
-        line = pygame.Rect(i, 0, 2, HEIGHT)
-        pygame.draw.rect(grid_surface, "red", line)
-    for i in range(0, HEIGHT, 100):  # big horizontal lines
-        line = pygame.Rect(0, i, WIDTH, 2)
-        pygame.draw.rect(grid_surface, "red", line)
-    for i in range(0, WIDTH, 20):  # small vertical lines
-        line = pygame.Rect(i, 0, 1, HEIGHT)
-        pygame.draw.rect(grid_surface, "grey", line)
-    for i in range(0, HEIGHT, 20):  # small horizontal lines
-        line = pygame.Rect(0, i, WIDTH, 1)
-        pygame.draw.rect(grid_surface, "grey", line)
-    screen.blit(grid_surface, (0, 0))  # display all grid lines
-
-    # 2. Check FPS every 5 seconds
-    if frame % 300 == 0 and game_state == "playing":
-        t = time.time() - start_time
-        fps = frame / t
-        print(f"Frame: {frame}, Time: {t:.2f} , FPS: {fps:.2f}")
-        if fps < 55:
-            print("LOW FPS WARNING", file=sys.stderr)
-
-    # 3. right click to get coordinates
-    for event in frame_events:
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
-            print(f"Mouse coordinates: {event.pos}")
+# def run_debug():
+#     """
+#     Create coordinate grid for easy drawing and check frame rate
+#     """
+#     # 1. Draw grid
+#     grid_surface = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+#     for i in range(0, WIDTH, 100):  # big vertical lines
+#         line = pygame.Rect(i, 0, 2, HEIGHT)
+#         pygame.draw.rect(grid_surface, "red", line)
+#     for i in range(0, HEIGHT, 100):  # big horizontal lines
+#         line = pygame.Rect(0, i, WIDTH, 2)
+#         pygame.draw.rect(grid_surface, "red", line)
+#     for i in range(0, WIDTH, 20):  # small vertical lines
+#         line = pygame.Rect(i, 0, 1, HEIGHT)
+#         pygame.draw.rect(grid_surface, "grey", line)
+#     for i in range(0, HEIGHT, 20):  # small horizontal lines
+#         line = pygame.Rect(0, i, WIDTH, 1)
+#         pygame.draw.rect(grid_surface, "grey", line)
+#     screen.blit(grid_surface, (0, 0))  # display all grid lines
+#
+#     # 2. Check FPS every 5 seconds
+#     if frame % 300 == 0 and game_state == "playing":
+#         t = time.time() - start_time
+#         fps = frame / t
+#         print(f"Frame: {frame}, Time: {t:.2f} , FPS: {fps:.2f}")
+#         if fps < 55:
+#             print("LOW FPS WARNING", file=sys.stderr)
+#
+#     # 3. right click to get coordinates
+#     for event in frame_events:
+#         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+#             print(f"Mouse coordinates: {event.pos}")
 
 
 def add_score(scores, to_add):
@@ -284,7 +285,7 @@ def handle_player_state():
                     player_rect = scaled_surf.get_rect(
                         bottomleft=(25, player_rect.bottom))
                     screen.blit(scaled_surf, player_rect)
-
+    # player is normal-sized
     else:
         # player is flying
         if cur_power_up.type == "fly":
@@ -401,9 +402,7 @@ def get_egg(prev_loc, frame):
 
 
 def get_power_up():
-    """Spawns a power up object
-    Chances: 25% each
-    """
+    """Spawns a power up object with equal probability"""
     # make sure it doesn't fully overlap with eggs
     location = 800
     for i in range(len(eggs)):
@@ -416,9 +415,9 @@ def get_power_up():
     choices = ["health", "shield", "fly", "small"]
     # don't spawn power ups that are currently useless
     # also apply character power up restrictions
-    if player_hp > 95 or character == 3:
+    if player_hp > 99 or character == 3:
         choices.remove("health")
-    if player_shield > 20 or character == 3:
+    if character == 3:
         choices.remove("shield")
     chosen = random.choice(choices)
 
@@ -443,17 +442,16 @@ def get_phase(frame):
 
 def get_obstacle_speed(frame):
     """Get the speed at which obstacles move left, depending on the
-    frame
-    Fastest speed is reached in 4th phase"""
+    frame"""
     slowest = 5.5
     fastest = 8
-    if frame < 2700:
+    if frame < 2700:  # start with linear increase
         return frame * (fastest - slowest) / 2700 + slowest
-    else:
-        return fastest
+    else:  # then use logarithmic increase
+        return fastest + 5*log2(frame/2700)
 
 
-DEVELOPER_MODE = False
+# DEVELOPER_MODE = False
 
 # Initialize Pygame and create a window
 pygame.init()
@@ -513,7 +511,7 @@ get_egg_surf = {"normal": egg_surf,
 Egg = namedtuple("Egg",
                  ["rect", "type", "destroyed", "visible"])
 
-# load power up assets
+# Load power up assets
 health_surf = pygame.image.load(
     "graphics/power_ups/health.png").convert_alpha()
 shield_surf = pygame.image.load(
@@ -536,8 +534,7 @@ get_power_up_color = {"health": "#FF0213",
                       "small": "#CCFFFF"}
 
 # Power up objects that spawn on the map
-Power_up = namedtuple("Power_up",
-                      ["rect", "type", "value"])
+Power_up = namedtuple("Power_up", ["rect", "type", "value"])
 
 # Power up that the player currently has
 Player_power_up = namedtuple("Player_power_up", ["type", "value"])
@@ -545,8 +542,8 @@ no_power_up = Player_power_up("", 0)
 
 # default game state variables
 game_state = "main_menu"  # determines the current state of the game
-jump_start_speed = -17  # The speed at which the player jumps
-players_fall_speed = 0  # The current speed at which the player falls
+jump_start_speed = -17  # the speed at which the player jumps
+players_fall_speed = 0  # the current speed at which the player falls
 gravity = 1  # acceleration from gravity
 
 frame = 0  # used to keep track of score
@@ -630,6 +627,7 @@ while running:
                                            cur_power_up.value - 1)
             if cur_power_up.value <= 0:
                 cur_power_up = no_power_up
+            # print(cur_power_up)
 
         # adjust player's vertical location then blit it
         players_fall_speed += gravity
@@ -640,12 +638,14 @@ while running:
         # check for player actions like jumping
         handle_player_state()
 
-        # update the states of egg objects
+        # update the states of egg objects and check for collision
         handle_egg_objects()
+        # print(player_hp, player_shield)
 
-        # spawn power-ups around every 500 frames
-        if randint(0, 500) == 0:
+        # spawn power-ups around every 1000 frames
+        if randint(0, 1000) == 0:
             power_ups.append(get_power_up())
+            # print("spawned power up")
         handle_power_up_objects()
 
         # lost game, show death message
@@ -667,6 +667,7 @@ while running:
                                               True, "red")
             message_rect = death_message.get_rect(center=(WIDTH / 2, 200))
             screen.blit(death_message, message_rect)
+            # print("You died!")
 
         # update frame which is used to keep track of current score
         frame += 1
@@ -677,6 +678,7 @@ while running:
         for event in frame_events:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                 game_state = "main_menu"
+                # print("entered main menu")
 
     # player is in help menu
     elif game_state == "help_menu":
@@ -727,6 +729,7 @@ while running:
                 # check if player wants to enter help menu
                 if button.collidepoint((x, y)):
                     game_state = "help_menu"
+                    # print("entered help menu")
 
                 # check if player selected character to start game
                 elif 152 <= x <= 290 and 170 <= y <= 317:
@@ -749,8 +752,8 @@ while running:
                     get_max_power_up_val["fly"] *= 2
                     get_max_power_up_val["small"] *= 2
 
-    if DEVELOPER_MODE:  # DEBUG FEATURES
-        run_debug()
+    # if DEVELOPER_MODE:  # DEBUG FEATURES
+    #     run_debug()
 
     # flip() the display to put your work on screen
     pygame.display.flip()
