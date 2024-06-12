@@ -1,7 +1,7 @@
 """Dino Game in Python
 
 A game similar to the famous Chrome Dino Game, built using pygame.
-Made by intern: @bassemfarid, no one or nothing else.
+Made by intern: @bassemfarid and Ivan Li
 """
 
 import sys
